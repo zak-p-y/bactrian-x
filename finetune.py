@@ -20,7 +20,7 @@ from peft import (
     get_peft_model,
     get_peft_model_state_dict,
     set_peft_model_state_dict,
-    prepare_model_for_int8_training,
+    prepare_model_for_kbit_training,
 )
 
 from utils.prompter import Prompter
@@ -58,6 +58,10 @@ class DataArguments:
         default=None, metadata={"help": "The number of processes to use for the preprocessing."}
     )
     val_set_size: Optional[int] = field(default=2000, metadata={"help": "The validation set size. For loss checking."})
+    max_samples_per_lang: Optional[int] = field(
+        default=None,
+        metadata={"help": "Cap the number of training rows per language after a deterministic shuffle (None = full split)."},
+    )
 
 @dataclass
 class BactrianTrainingArguments(TrainingArguments):
@@ -171,7 +175,7 @@ def train():
         )
 
     if model_args.load_in_8bit:
-        model = prepare_model_for_int8_training(model)
+        model = prepare_model_for_kbit_training(model)
     else:
         model.enable_input_require_grads()
 
@@ -188,8 +192,16 @@ def train():
 
     # Load dataset from HF Hub
     if training_args.lang != '':
-        all_dataset = [load_dataset(data_args.data_path, lang) for lang in training_args.lang.split(',')]
-    merged_dataset = concatenate_datasets(list(map(lambda x: x['train'], all_dataset)))
+        all_dataset = []
+        for lang in training_args.lang.split(','):
+            lang_dataset = load_dataset(data_args.data_path, lang)['train']
+            if data_args.max_samples_per_lang is not None:
+                num_samples = min(data_args.max_samples_per_lang, len(lang_dataset))
+                # Fixed shuffle seed: every run sees the exact same subset regardless of --seed.
+                lang_dataset = lang_dataset.shuffle(seed=42).select(range(num_samples))
+                logger.info(f"Using {num_samples} samples for language '{lang}'.")
+            all_dataset.append({'train': lang_dataset})
+    merged_dataset = concatenate_datasets([x['train'] for x in all_dataset])
     raw_datasets = DatasetDict({'train':merged_dataset})
 
 
@@ -252,7 +264,11 @@ def train():
         )
     ).__get__(model, type(model))
 
-    if torch.__version__ >= "2" and sys.platform != "win32":
+    if (
+        torch.__version__ >= "2"
+        and sys.platform != "win32"
+        and os.environ.get("TORCH_COMPILE", "1") == "1"
+    ):
         model = torch.compile(model)
 
     trainer.train()
