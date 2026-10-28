@@ -72,7 +72,7 @@ class BactrianTrainingArguments(TrainingArguments):
     lang: str = field(default="zh", metadata={"help": "The language or language list separated by `,`, dataset will be downlaoded from HF Hub."})
     template_dir: str = field(default="./templates", metadata={"help": "Prompt template dir."})
     prompt_template_name: str = field(default="bactrian", metadata={"help": "Prompt template file to use."})
-    evaluation_strategy: str = field(default="steps", metadata={"help": ""})
+    eval_strategy: str = field(default="steps", metadata={"help": ""})
     save_strategy: str = field(default="steps", metadata={"help": ""})
     wandb_project: str = field(default="bactrian", metadata={"help": "Weight & Bias (W&B) project name."})
 

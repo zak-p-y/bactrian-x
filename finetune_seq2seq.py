@@ -21,7 +21,7 @@ from peft import (
     get_peft_model,
     get_peft_model_state_dict,
     set_peft_model_state_dict,
-    prepare_model_for_int8_training,
+    prepare_model_for_kbit_training,
 )
 
 from utils.prompter import Prompter
@@ -72,7 +72,7 @@ class BactrianTrainingArguments(Seq2SeqTrainingArguments):
     lang: str = field(default="zh", metadata={"help": "The language or language list separated by `,`, dataset will be downlaoded from HF Hub."})
     template_dir: str = field(default="./templates", metadata={"help": "Prompt template dir."})
     prompt_template_name: str = field(default="bactrian_seq2seq", metadata={"help": "Prompt template file to use."})
-    evaluation_strategy: str = field(default="steps", metadata={"help": ""})
+    eval_strategy: str = field(default="steps", metadata={"help": ""})
     save_strategy: str = field(default="steps", metadata={"help": ""})
     wandb_project: str = field(default="bactrian", metadata={"help": "Weight & Bias (W&B) project name."})
 
@@ -158,7 +158,7 @@ def train():
     )
 
     if model_args.load_in_8bit:
-        model = prepare_model_for_int8_training(model)
+        model = prepare_model_for_kbit_training(model)
     else:
         model.enable_input_require_grads()
 
