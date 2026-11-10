@@ -18,7 +18,6 @@ from datasets import load_dataset, concatenate_datasets, DatasetDict
 from peft import (
     LoraConfig,
     get_peft_model,
-    get_peft_model_state_dict,
     set_peft_model_state_dict,
     prepare_model_for_kbit_training,
 )
@@ -257,13 +256,6 @@ def train():
     )
     model.config.use_cache = False
 
-    old_state_dict = model.state_dict
-    model.state_dict = (
-        lambda self, *_, **__: get_peft_model_state_dict(
-            self, old_state_dict()
-        )
-    ).__get__(model, type(model))
-
     if (
         torch.__version__ >= "2"
         and sys.platform != "win32"
@@ -273,7 +265,10 @@ def train():
 
     trainer.train()
 
-    model.save_pretrained(training_args.output_dir)
+    # PeftModel.save_pretrained writes only the adapter weights. Guard it so both
+    # DDP ranks do not write the same files concurrently.
+    if int(os.environ.get("LOCAL_RANK", 0)) == 0:
+        model.save_pretrained(training_args.output_dir)
 
 
 if __name__ == "__main__":
